@@ -199,8 +199,8 @@ describe("POST /api/links", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 401 for a tampered session cookie", async () => {
-    // 異なる secret で署名した Cookie を送る（改ざん / 秘密鍵推測のシミュレート）
+  it("returns 401 for a tampered session cookie (wrong secret)", async () => {
+    // 異なる secret で署名した Cookie を送る（秘密鍵推測のシミュレート）
     const fake = await signSession(String(Date.now()), "wrong-secret");
     const res = await req("/api/links", {
       method: "POST",
@@ -210,6 +210,55 @@ describe("POST /api/links", () => {
       },
       body: JSON.stringify({ url: "https://example.com/tampered" }),
     });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 for a tampered session cookie (mutated signature)", async () => {
+    // 正規の Cookie を SESSION_SECRET で署名したのち、署名の末尾 1 文字を書き換える。
+    // これが改ざんの最も現実的な形（バイト反転で full-coverage を保証する）
+    const valid = await signSession(String(Date.now()), sessionSecret);
+    const last = valid.slice(-1);
+    const flipped = last === "A" ? "B" : "A";
+    const tampered = valid.slice(0, -1) + flipped;
+    const res = await req("/api/links", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `session=${tampered}`,
+      },
+      body: JSON.stringify({ url: "https://example.com/tampered-sig" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 for a tampered session cookie (truncated, length mismatch)", async () => {
+    // 正規 Cookie の末尾を切り詰めて長さを変える（長さ不一致の改ざん）。
+    // verifySession は長さ不一致でも定数時間で比較し、必ず 401 を返すべき。
+    const valid = await signSession(String(Date.now()), sessionSecret);
+    const tampered = valid.slice(0, -3);
+    const res = await req("/api/links", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `session=${tampered}`,
+      },
+      body: JSON.stringify({ url: "https://example.com/tampered-len" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 when SESSION_SECRET is not configured", async () => {
+    // SESSION_SECRET 未設定時は adminAuth が即座に 401 を返すべき（src/index.ts:121-124）
+    const cookie = await signSession(String(Date.now()), sessionSecret);
+    const res = await app.request(
+      `${origin}/api/links`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: `session=${cookie}` },
+        body: JSON.stringify({ url: "https://example.com/no-secret" }),
+      },
+      { ...env, SESSION_SECRET: "" },
+    );
     expect(res.status).toBe(401);
   });
 });

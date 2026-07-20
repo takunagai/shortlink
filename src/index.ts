@@ -95,15 +95,15 @@ async function verifySession(cookie: string, secret: string): Promise<string | n
   const payload = cookie.slice(0, lastDot);
   const _signature = cookie.slice(lastDot + 1);
   const expected = await signSession(payload, secret);
-  // 定数時間比較でタイミング攻撃を防ぐ（XOR 蓄積: short-circuit せず全バイトを比較）
+  // 定数時間比較でタイミング攻撃を防ぐ（XOR 蓄積: short-circuit せず全バイトを比較）。
+  // 長さ不一致も早期 return せず diff に蓄積し、長い方の長さまで比較して処理時間を
+  // 入力内容に依存させない。
   const a = new TextEncoder().encode(expected);
   const b = new TextEncoder().encode(cookie);
-  if (a.length !== b.length) {
-    return null;
-  }
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a[i] ^ b[i];
+  const maxLen = Math.max(a.length, b.length);
+  let diff = a.length !== b.length ? 1 : 0;
+  for (let i = 0; i < maxLen; i++) {
+    diff |= (i < a.length ? a[i] : 0) ^ (i < b.length ? b[i] : 0);
   }
   return diff === 0 ? payload : null;
 }
@@ -115,9 +115,8 @@ async function verifySession(cookie: string, secret: string): Promise<string | n
  * SESSION_SECRET は ADMIN_API_KEY とは別の専用秘密鍵（セッション秘密分離: B-002）。
  */
 const adminAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  if (!c.env.ADMIN_API_KEY) {
-    console.warn("ADMIN_API_KEY is not configured");
-  }
+  // ADMIN_API_KEY はログイン時の比較専用（B-002）。ここでの存在チェックや警告は
+  // 出さない（SESSION_SECRET のみが adminAuth の関心事 → 下位でチェック）。
   if (!c.env.SESSION_SECRET) {
     console.warn("SESSION_SECRET is not configured");
     return c.json({ error: "unauthorized" }, 401);
