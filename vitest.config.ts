@@ -6,17 +6,39 @@ import { defineConfig } from "vitest/config";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  plugins: [
-    cloudflareTest(async () => {
-      const migrations = await readD1Migrations(path.join(__dirname, "drizzle"));
-      return {
-        wrangler: { configPath: "./wrangler.jsonc" },
-        miniflare: { bindings: { TEST_MIGRATIONS: migrations } },
-      };
-    }),
-  ],
   test: {
-    setupFiles: ["./test/apply-migrations.ts"],
-    include: ["test/**/*.test.ts"],
+    projects: [
+      {
+        plugins: [
+          cloudflareTest(async () => {
+            const migrations = await readD1Migrations(path.join(__dirname, "drizzle"));
+            return {
+              wrangler: { configPath: "./wrangler.jsonc" },
+              miniflare: { bindings: { TEST_MIGRATIONS: migrations } },
+            };
+          }),
+        ],
+        test: {
+          name: "workers",
+          include: ["test/**/*.test.ts"],
+          exclude: ["test/**/*.dom.test.tsx"],
+          setupFiles: ["./test/apply-migrations.ts"],
+        },
+      },
+      {
+        resolve: {
+          alias: {
+            "@": path.resolve(__dirname, "./src"),
+          },
+        },
+        test: {
+          name: "dom",
+          include: ["test/**/*.dom.test.tsx"],
+          environment: "happy-dom",
+          globals: true,
+          setupFiles: ["./test/setup-dom.ts"],
+        },
+      },
+    ],
   },
 });

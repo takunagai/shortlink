@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { desc, eq, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import { getCookie } from "hono/cookie";
 import * as z from "zod";
 import { createDb } from "./db";
 import { links } from "./db/schema";
@@ -41,6 +42,10 @@ const createLinkSchema = z.object({
     .optional(),
 });
 
+const loginSchema = z.object({
+  password: z.string().min(1),
+});
+
 // slug 指定時の検証フック: 予約語は 400 で弾く。
 const validateCreateLink = zValidator("json", createLinkSchema, (result, c) => {
   if (!result.success) {
@@ -51,21 +56,71 @@ const validateCreateLink = zValidator("json", createLinkSchema, (result, c) => {
   }
 });
 
-const app = new Hono<{ Bindings: { DB: D1Database; ASSETS: Fetcher; ADMIN_API_KEY: string } }>();
-
 type AppEnv = { Bindings: { DB: D1Database; ASSETS: Fetcher; ADMIN_API_KEY: string } };
 
+const app = new Hono<AppEnv>();
+
+const SESSION_COOKIE = "session";
+const SESSION_MAX_AGE = 86400;
+
 /**
- * 管理 API 用 Bearer token 認証 middleware。
- * Authorization: Bearer <ADMIN_API_KEY> を検証する。失敗時は 401。
+ * セッション Cookie 署名ユーティリティ。
+ * payload を HMAC-SHA256 で署名し、`payload.signature` 形式で返す。
+ */
+async function signSession(payload: string, secret: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
+  const signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
+  return `${payload}.${signature}`;
+}
+
+/**
+ * セッション Cookie 検証ユーティリティ。
+ * Cookie 値を検証し、署名が正しければ payload を返す。失敗時は null。
+ */
+async function verifySession(cookie: string, secret: string): Promise<string | null> {
+  const lastDot = cookie.lastIndexOf(".");
+  if (lastDot === -1) {
+    return null;
+  }
+  const payload = cookie.slice(0, lastDot);
+  const _signature = cookie.slice(lastDot + 1);
+  const expected = await signSession(payload, secret);
+  // 定数時間比較でタイミング攻撃を防ぐ
+  const a = new TextEncoder().encode(expected);
+  const b = new TextEncoder().encode(cookie);
+  if (a.length !== b.length) {
+    return null;
+  }
+  let equal = true;
+  for (let i = 0; i < a.length; i++) {
+    equal &&= a[i] === b[i];
+  }
+  return equal ? payload : null;
+}
+
+/**
+ * 管理 API 用セッション Cookie 認証 middleware。
+ * `session` Cookie を検証し、署名が正しく payload が ADMIN_API_KEY と一致すれば通過。
+ * 失敗時は 401。
  */
 const adminAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const header = c.req.header("Authorization");
-  const token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+  const cookie = getCookie(c, SESSION_COOKIE);
   if (!c.env.ADMIN_API_KEY) {
     console.warn("ADMIN_API_KEY is not configured");
   }
-  if (!token || token !== c.env.ADMIN_API_KEY) {
+  if (!cookie) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  const payload = await verifySession(cookie, c.env.ADMIN_API_KEY);
+  if (payload !== c.env.ADMIN_API_KEY) {
     return c.json({ error: "unauthorized" }, 401);
   }
   await next();
@@ -98,6 +153,26 @@ app.use("*", async (c, next) => {
     return asset;
   }
   return next();
+});
+
+/**
+ * 管理画面ログイン。
+ * パスワードが ADMIN_API_KEY と一致すれば署名付き session Cookie を返す。
+ */
+app.post("/api/auth/login", zValidator("json", loginSchema), async (c) => {
+  const { password } = c.req.valid("json");
+  if (!c.env.ADMIN_API_KEY) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  if (password !== c.env.ADMIN_API_KEY) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  const value = await signSession(c.env.ADMIN_API_KEY, c.env.ADMIN_API_KEY);
+  c.header(
+    "Set-Cookie",
+    `${SESSION_COOKIE}=${value}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSION_MAX_AGE}`,
+  );
+  return c.json({ ok: true }, 200);
 });
 
 /**
@@ -210,3 +285,4 @@ app.get("/:slug", async (c) => {
 });
 
 export default app;
+export { signSession, verifySession };

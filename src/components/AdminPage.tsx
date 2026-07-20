@@ -5,6 +5,10 @@
  * 子コンポーネントはコールバックで親へ通知し、親が fetch → state 更新を行う
  * （docs/admin-design.md §5）。
  *
+ * 認証はサーバサイドセッション Cookie。パスワード検証は POST /api/auth/login
+ * で行い、成功時に HttpOnly Cookie が設定される。以降の fetch は credentials: 'include'
+ * で Cookie を自動送信する。
+ *
  * 一覧 status: loading → list | empty | error。作成/削除成功時は再取得（list を保持したまま
  * 再 fetch し、フェードで更新。空っぽにはしない）。
  */
@@ -21,15 +25,19 @@ export function AdminPage() {
   const [status, setStatus] = useState<ListStatus>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [origin, setOrigin] = useState<string>("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginSubmitting, setLoginSubmitting] = useState(false);
 
   /** 一覧を再取得。refetch 中は既存リストを保持し、空っぽにしない。 */
   const refreshLinks = useCallback(async () => {
     let res: Response;
     try {
       res = await fetch("/api/links", {
+        credentials: "include",
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${import.meta.env.ADMIN_API_KEY}`,
         },
       });
     } catch {
@@ -59,13 +67,46 @@ export function AdminPage() {
     setErrorMessage(null);
   }, []);
 
-  // 初回取得
+  // 初回取得：認証済みなら一覧を読み込む
   useEffect(() => {
     if (typeof window !== "undefined") {
       setOrigin(window.location.origin);
     }
-    void refreshLinks();
-  }, [refreshLinks]);
+    if (isAuthenticated) {
+      void refreshLinks();
+    }
+  }, [refreshLinks, isAuthenticated]);
+
+  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoginSubmitting(true);
+    setLoginError(null);
+
+    let res: Response;
+    try {
+      res = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ password }),
+      });
+    } catch {
+      setLoginError("通信エラーが発生しました。");
+      setLoginSubmitting(false);
+      return;
+    }
+
+    if (res.ok) {
+      setIsAuthenticated(true);
+      setPassword("");
+    } else {
+      setLoginError("パスワードが正しくありません。");
+    }
+    setLoginSubmitting(false);
+  }
 
   /** POST /api/links を叩き、結果を LinkCreateForm の型で返す。 */
   const createLink = useCallback(
@@ -74,10 +115,10 @@ export function AdminPage() {
       try {
         res = await fetch("/api/links", {
           method: "POST",
+          credentials: "include",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
-            Authorization: `Bearer ${import.meta.env.ADMIN_API_KEY}`,
           },
           body: JSON.stringify(input),
         });
@@ -117,7 +158,7 @@ export function AdminPage() {
       try {
         res = await fetch(`/api/links/${encodeURIComponent(slug)}`, {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${import.meta.env.ADMIN_API_KEY}` },
+          credentials: "include",
         });
       } catch {
         return { ok: false, message: "通信エラーが発生しました。" };
@@ -136,6 +177,48 @@ export function AdminPage() {
     },
     [refreshLinks],
   );
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <PageHeader title="管理ログイン" subtitle="" />
+        <section className="mx-auto mt-8 max-w-md rounded-card border border-border bg-surface shadow-card">
+          <form className="space-y-4 p-6" onSubmit={handleLogin}>
+            <div>
+              <label htmlFor="password" className="block text-body font-bold text-ink">
+                パスワード
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loginSubmitting}
+                className="mt-2 w-full rounded-control border border-border bg-surface px-3 py-2 text-body text-ink focus:border-border-strong focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </div>
+            {loginError && (
+              <p
+                role="alert"
+                className="rounded-control bg-danger-subtle px-3 py-2 text-meta text-danger"
+              >
+                {loginError}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={loginSubmitting}
+              className="inline-flex h-10 w-full items-center justify-center rounded-control bg-brand px-4 text-body font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loginSubmitting ? "ログイン中…" : "ログイン"}
+            </button>
+          </form>
+        </section>
+      </>
+    );
+  }
 
   return (
     <>

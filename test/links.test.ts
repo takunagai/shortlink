@@ -1,17 +1,59 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import app from "../src/index";
+import app, { signSession } from "../src/index";
 
 const origin = "http://localhost:8787";
 const adminApiKey = "dev-secret-key-change-in-production";
 
-function authHeaders() {
-  return { Authorization: `Bearer ${adminApiKey}` };
-}
-
 function req(path: string, init?: RequestInit) {
   return app.request(`${origin}${path}`, init, env);
 }
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const cookie = await signSession(adminApiKey, adminApiKey);
+  return { Cookie: `session=${cookie}` };
+}
+
+describe("POST /api/auth/login", () => {
+  it("returns a session cookie when password matches ADMIN_API_KEY", async () => {
+    const res = await req("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: adminApiKey }),
+    });
+
+    expect(res.status).toBe(200);
+    const setCookie = res.headers.get("Set-Cookie");
+    expect(setCookie).toContain("session=");
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie).toContain("SameSite=Strict");
+  });
+
+  it("returns 401 when password is wrong", async () => {
+    const res = await req("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "wrong" }),
+    });
+
+    expect(res.status).toBe(401);
+    expect(res.headers.get("Set-Cookie")).toBeNull();
+  });
+
+  it("returns 401 when ADMIN_API_KEY is not configured", async () => {
+    const res = await app.request(
+      `${origin}/api/auth/login`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: adminApiKey }),
+      },
+      { ...env, ADMIN_API_KEY: "" },
+    );
+
+    expect(res.status).toBe(401);
+  });
+});
 
 describe("POST /api/links", () => {
   it("rejects unauthenticated requests with 401", async () => {
@@ -27,7 +69,7 @@ describe("POST /api/links", () => {
   it("creates a link with 201 and returns slug + shortUrl when authenticated", async () => {
     const res = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ url: "https://example.com/page" }),
     });
 
@@ -40,7 +82,7 @@ describe("POST /api/links", () => {
   it("generates a 7-character base62 slug when omitted", async () => {
     const res = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ url: "https://example.com/foo" }),
     });
 
@@ -53,7 +95,7 @@ describe("POST /api/links", () => {
   it("rejects an invalid URL with 400", async () => {
     const res = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ url: "not-a-url" }),
     });
 
@@ -63,7 +105,7 @@ describe("POST /api/links", () => {
   it("rejects non-http(s) URL with 400", async () => {
     const res = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ url: "ftp://example.com/file" }),
     });
 
@@ -75,14 +117,14 @@ describe("POST /api/links", () => {
 
     const first = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ url: "https://example.com/1", slug }),
     });
     expect(first.status).toBe(201);
 
     const second = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ url: "https://example.com/2", slug }),
     });
     expect(second.status).toBe(409);
@@ -92,11 +134,53 @@ describe("POST /api/links", () => {
     for (const slug of ["api/foo", "admin/bar"]) {
       const res = await req("/api/links", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ url: "https://example.com/reserved", slug }),
       });
       expect(res.status).toBe(400);
     }
+  });
+
+  it("rejects exact reserved slugs admin and api", async () => {
+    for (const slug of ["admin", "api"]) {
+      const res = await req("/api/links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ url: "https://example.com/reserved", slug }),
+      });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it("rejects invalid slug formats", async () => {
+    const invalidSlugs = ["", "foo bar", "foo.bar", "foo/bar", "a".repeat(65)];
+    for (const slug of invalidSlugs) {
+      const res = await req("/api/links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ url: "https://example.com/invalid-slug", slug }),
+      });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it("rejects malformed or missing session cookies with 401", async () => {
+    const cases: Record<string, string>[] = [{ Cookie: "session=invalid" }, { Cookie: "session=" }];
+    for (const headers of cases) {
+      const res = await req("/api/links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ url: "https://example.com/auth-test" }),
+      });
+      expect(res.status).toBe(401);
+    }
+
+    const noAuth = await req("/api/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: "https://example.com/auth-test" }),
+    });
+    expect(noAuth.status).toBe(401);
   });
 });
 
@@ -107,7 +191,7 @@ describe("GET /:slug redirect", () => {
 
     const create = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ url, slug }),
     });
     expect(create.status).toBe(201);
@@ -116,7 +200,7 @@ describe("GET /:slug redirect", () => {
     expect(redirect.status).toBe(302);
     expect(redirect.headers.get("Location")).toBe(url);
 
-    const list = await req("/api/links", { headers: authHeaders() });
+    const list = await req("/api/links", { headers: await authHeaders() });
     const rows = await list.json<Array<{ slug: string; clicks: number }>>();
     const row = rows.find((r) => r.slug === slug);
     expect(row?.clicks).toBe(1);
@@ -140,16 +224,16 @@ describe("GET /api/links list", () => {
 
     await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ url: "https://example.com/a", slug: slugA }),
     });
     await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ url: "https://example.com/b", slug: slugB }),
     });
 
-    const res = await req("/api/links", { headers: authHeaders() });
+    const res = await req("/api/links", { headers: await authHeaders() });
     const rows = await res.json<Array<{ slug: string }>>();
     const slugs = rows.map((r) => r.slug);
     const idxA = slugs.indexOf(slugA);
@@ -171,11 +255,11 @@ describe("DELETE /api/links/:slug", () => {
 
     await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       body: JSON.stringify({ url: "https://example.com/delete", slug }),
     });
 
-    const del = await req(`/api/links/${slug}`, { method: "DELETE", headers: authHeaders() });
+    const del = await req(`/api/links/${slug}`, { method: "DELETE", headers: await authHeaders() });
     expect(del.status).toBe(204);
 
     const redirect = await req(`/${slug}`);
@@ -183,7 +267,10 @@ describe("DELETE /api/links/:slug", () => {
   });
 
   it("returns 404 when deleting an unregistered slug", async () => {
-    const res = await req("/api/links/no-such-slug", { method: "DELETE", headers: authHeaders() });
+    const res = await req("/api/links/no-such-slug", {
+      method: "DELETE",
+      headers: await authHeaders(),
+    });
     expect(res.status).toBe(404);
   });
 });

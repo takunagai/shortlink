@@ -14,8 +14,5 @@ export default defineConfig({
   integrations: [react()],
   vite: {
     plugins: [tailwindcss()],
-    define: {
-      "import.meta.env.ADMIN_API_KEY": JSON.stringify(process.env.ADMIN_API_KEY ?? ""),
-    },
   },
 });

@@ -16,7 +16,8 @@
       "**/*.jsonc",
       "!design",
       "!docs",
-      "!drizzle"
+      "!drizzle",
+      "!worker-configuration.d.ts"
     ]
   },
   "formatter": {
