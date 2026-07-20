@@ -4,13 +4,15 @@ import app, { signSession } from "../src/index";
 
 const origin = "http://localhost:8787";
 const adminApiKey = "dev-secret-key-change-in-production";
+// テスト用 SESSION_SECRET。.dev.vars の SESSION_SECRET と同じ値（B-002 で秘密分離）。
+const sessionSecret = "dev-session-secret";
 
 function req(path: string, init?: RequestInit) {
   return app.request(`${origin}${path}`, init, env);
 }
 
 async function authHeaders(): Promise<Record<string, string>> {
-  const cookie = await signSession(adminApiKey, adminApiKey);
+  const cookie = await signSession(String(Date.now()), sessionSecret);
   return { Cookie: `session=${cookie}` };
 }
 
@@ -181,6 +183,34 @@ describe("POST /api/links", () => {
       body: JSON.stringify({ url: "https://example.com/auth-test" }),
     });
     expect(noAuth.status).toBe(401);
+  });
+
+  it("returns 401 for an expired session", async () => {
+    // 発行時刻を十分過去にして SESSION_MAX_AGE (86400s) を超過させる
+    const oldCookie = await signSession(String(Date.now() - 100000 * 1000), sessionSecret);
+    const res = await req("/api/links", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `session=${oldCookie}`,
+      },
+      body: JSON.stringify({ url: "https://example.com/expired" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 for a tampered session cookie", async () => {
+    // 異なる secret で署名した Cookie を送る（改ざん / 秘密鍵推測のシミュレート）
+    const fake = await signSession(String(Date.now()), "wrong-secret");
+    const res = await req("/api/links", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `session=${fake}`,
+      },
+      body: JSON.stringify({ url: "https://example.com/tampered" }),
+    });
+    expect(res.status).toBe(401);
   });
 });
 

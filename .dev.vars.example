@@ -1,0 +1,2 @@
+ADMIN_API_KEY=change-me-to-a-strong-random-string
+SESSION_SECRET=change-me-to-a-different-strong-random-string

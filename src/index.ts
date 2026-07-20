@@ -56,7 +56,9 @@ const validateCreateLink = zValidator("json", createLinkSchema, (result, c) => {
   }
 });
 
-type AppEnv = { Bindings: { DB: D1Database; ASSETS: Fetcher; ADMIN_API_KEY: string } };
+type AppEnv = {
+  Bindings: { DB: D1Database; ASSETS: Fetcher; ADMIN_API_KEY: string; SESSION_SECRET: string };
+};
 
 const app = new Hono<AppEnv>();
 
@@ -93,34 +95,43 @@ async function verifySession(cookie: string, secret: string): Promise<string | n
   const payload = cookie.slice(0, lastDot);
   const _signature = cookie.slice(lastDot + 1);
   const expected = await signSession(payload, secret);
-  // 定数時間比較でタイミング攻撃を防ぐ
+  // 定数時間比較でタイミング攻撃を防ぐ（XOR 蓄積: short-circuit せず全バイトを比較）
   const a = new TextEncoder().encode(expected);
   const b = new TextEncoder().encode(cookie);
   if (a.length !== b.length) {
     return null;
   }
-  let equal = true;
+  let diff = 0;
   for (let i = 0; i < a.length; i++) {
-    equal &&= a[i] === b[i];
+    diff |= a[i] ^ b[i];
   }
-  return equal ? payload : null;
+  return diff === 0 ? payload : null;
 }
 
 /**
  * 管理 API 用セッション Cookie 認証 middleware。
- * `session` Cookie を検証し、署名が正しく payload が ADMIN_API_KEY と一致すれば通過。
- * 失敗時は 401。
+ * `session` Cookie を HMAC-SHA256 で検証し、署名が正しく payload の発行時刻が
+ * SESSION_MAX_AGE 以内であれば通過。失敗時は 401。
+ * SESSION_SECRET は ADMIN_API_KEY とは別の専用秘密鍵（セッション秘密分離: B-002）。
  */
 const adminAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const cookie = getCookie(c, SESSION_COOKIE);
   if (!c.env.ADMIN_API_KEY) {
     console.warn("ADMIN_API_KEY is not configured");
   }
+  if (!c.env.SESSION_SECRET) {
+    console.warn("SESSION_SECRET is not configured");
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  const cookie = getCookie(c, SESSION_COOKIE);
   if (!cookie) {
     return c.json({ error: "unauthorized" }, 401);
   }
-  const payload = await verifySession(cookie, c.env.ADMIN_API_KEY);
-  if (payload !== c.env.ADMIN_API_KEY) {
+  const payload = await verifySession(cookie, c.env.SESSION_SECRET);
+  if (payload === null) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  const issued = Number(payload);
+  if (!Number.isFinite(issued) || Date.now() - issued > SESSION_MAX_AGE * 1000) {
     return c.json({ error: "unauthorized" }, 401);
   }
   await next();
@@ -157,17 +168,21 @@ app.use("*", async (c, next) => {
 
 /**
  * 管理画面ログイン。
- * パスワードが ADMIN_API_KEY と一致すれば署名付き session Cookie を返す。
+ * パスワードが ADMIN_API_KEY と一致すれば、発行時刻（UNIX epoch ms）を payload とし
+ * SESSION_SECRET で署名した session Cookie を返す（B-002: セッション秘密分離）。
  */
 app.post("/api/auth/login", zValidator("json", loginSchema), async (c) => {
   const { password } = c.req.valid("json");
   if (!c.env.ADMIN_API_KEY) {
     return c.json({ error: "unauthorized" }, 401);
   }
+  if (!c.env.SESSION_SECRET) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
   if (password !== c.env.ADMIN_API_KEY) {
     return c.json({ error: "unauthorized" }, 401);
   }
-  const value = await signSession(c.env.ADMIN_API_KEY, c.env.ADMIN_API_KEY);
+  const value = await signSession(String(Date.now()), c.env.SESSION_SECRET);
   c.header(
     "Set-Cookie",
     `${SESSION_COOKIE}=${value}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSION_MAX_AGE}`,
