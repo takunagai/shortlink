@@ -3,9 +3,6 @@
 // React 19 island（AdminPage, client:load）が状態と API 呼び出しを統括する。
 import "@/styles/global.css";
 import { AdminPage } from "@/components/AdminPage";
-
-// フォームに表示する origin。リクエストのホストを使う（ローカル/本番で切り替わる）。
-const origin = Astro.url.origin;
 ---
 
 <!doctype html>
@@ -17,7 +14,7 @@ const origin = Astro.url.origin;
   </head>
   <body class="min-h-screen">
     <main class="mx-auto max-w-5xl px-4 py-8 md:px-6">
-      <AdminPage origin={origin} client:load />
+      <AdminPage client:load />
     </main>
   </body>
 </html>

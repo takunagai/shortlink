@@ -16,15 +16,11 @@ import type { Link } from "@/types";
 
 type ListStatus = "loading" | "list" | "empty" | "error";
 
-type AdminPageProps = {
-  /** フォームの origin 表示用。サーバ（Astro）から渡す */
-  origin: string;
-};
-
-export function AdminPage({ origin }: AdminPageProps) {
+export function AdminPage() {
   const [links, setLinks] = useState<Link[]>([]);
   const [status, setStatus] = useState<ListStatus>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [origin, setOrigin] = useState<string>("");
 
   /** 一覧を再取得。refetch 中は既存リストを保持し、空っぽにしない。 */
   const refreshLinks = useCallback(async () => {
@@ -62,6 +58,9 @@ export function AdminPage({ origin }: AdminPageProps) {
 
   // 初回取得
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      setOrigin(window.location.origin);
+    }
     void refreshLinks();
   }, [refreshLinks]);
 

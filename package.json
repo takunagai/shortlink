@@ -4,10 +4,10 @@
   "description": "Cloudflare Workers URL shortener",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --config wrangler.jsonc",
     "deploy": "wrangler deploy",
     "build": "astro build",
-    "preview": "wrangler pages dev dist",
+    "preview": "wrangler dev --config wrangler.jsonc",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",

@@ -1,3 +1,4 @@
+import type { Fetcher } from "@cloudflare/workers-types";
 import { zValidator } from "@hono/zod-validator";
 import { desc, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
@@ -49,7 +50,36 @@ const validateCreateLink = zValidator("json", createLinkSchema, (result, c) => {
   }
 });
 
-const app = new Hono<{ Bindings: { DB: D1Database } }>();
+const app = new Hono<{ Bindings: { DB: D1Database; ASSETS: Fetcher } }>();
+
+/**
+ * 静的アセットフォールバック。
+ * /api/* と /:slug（短縮URLリダイレクト）以外のリクエストは dist/ の
+ * 静的アセットを優先して返す。これにより /admin など Astro ビルド成果物が
+ * 同一 Worker から配信される。
+ */
+app.use("*", async (c, next) => {
+  const pathname = new URL(c.req.url).pathname;
+  // API と slug リダイレクトは Hono ルートで処理する
+  if (pathname.startsWith("/api/")) {
+    return next();
+  }
+  // 予約語で始まるパスも静的アセット優先（/admin 等）
+  if (RESERVED_PREFIXES.some((p) => pathname === `/${p}` || pathname.startsWith(`/${p}/`))) {
+    const asset = await c.env.ASSETS.fetch(c.req.url);
+    if (asset.status !== 404) {
+      return asset;
+    }
+    return next();
+  }
+  // それ以外（通常の短縮 slug）もまず静的アセットを確認し、
+  // 404 なら下位の /:slug リダイレクトへフォールバック
+  const asset = await c.env.ASSETS.fetch(c.req.url);
+  if (asset.status !== 404) {
+    return asset;
+  }
+  return next();
+});
 
 /**
  * 新規短縮リンク作成。

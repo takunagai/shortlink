@@ -91,6 +91,12 @@ export function DeleteButton({ slug, onDelete }: DeleteButtonProps) {
 
       <dialog
         ref={dialogRef}
+        onCancel={(event) => {
+          // 削除中は ESC 閉じを禁止し、dialog と state の不整合を防ぐ
+          if (state === "deleting") {
+            event.preventDefault();
+          }
+        }}
         onClose={() => {
           // ESC やブラウザの close ボタンで閉じられた場合に state を整合させる
           if (state !== "deleting") {
