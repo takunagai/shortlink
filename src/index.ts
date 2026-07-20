@@ -96,14 +96,13 @@ async function verifySession(cookie: string, secret: string): Promise<string | n
   const _signature = cookie.slice(lastDot + 1);
   const expected = await signSession(payload, secret);
   // 定数時間比較でタイミング攻撃を防ぐ（XOR 蓄積: short-circuit せず全バイトを比較）。
-  // 長さ不一致も早期 return せず diff に蓄積し、長い方の長さまで比較して処理時間を
-  // 入力内容に依存させない。
+  // 長さ不一致は diff に蓄積（早期 return しない）。
+  // ループ上限を a.length（信頼側）に固定し、処理時間を入力内容に依存させない。
   const a = new TextEncoder().encode(expected);
   const b = new TextEncoder().encode(cookie);
-  const maxLen = Math.max(a.length, b.length);
   let diff = a.length !== b.length ? 1 : 0;
-  for (let i = 0; i < maxLen; i++) {
-    diff |= (i < a.length ? a[i] : 0) ^ (i < b.length ? b[i] : 0);
+  for (let i = 0; i < a.length; i++) {
+    diff |= a[i] ^ (i < b.length ? b[i] : 0);
   }
   return diff === 0 ? payload : null;
 }
