@@ -247,6 +247,52 @@ describe("POST /api/links", () => {
     expect(res.status).toBe(401);
   });
 
+  it("returns 401 for a padded cookie longer than the valid one (length mismatch)", async () => {
+    // 正規 Cookie に余分な文字を追加して長くする（パディングによる長さ不一致）。
+    // nit-1 の定数時間比較は長い方の長さまで走査し、長さ差を diff に蓄積して 401 にする。
+    const valid = await signSession(String(Date.now()), sessionSecret);
+    const padded = `${valid}AAA`;
+    const res = await req("/api/links", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `session=${padded}`,
+      },
+      body: JSON.stringify({ url: "https://example.com/tampered-pad" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 for a cookie ending with payload. (empty signature)", async () => {
+    // `payload.` 形式（lastIndexOf は有効だが署名が空）。verifySession は署名再計算で
+    // 空文字と比較し、diff !== 0 となって 401 を返すべき。
+    const payload = String(Date.now());
+    const res = await req("/api/links", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `session=${payload}.`,
+      },
+      body: JSON.stringify({ url: "https://example.com/empty-sig" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 for a cookie whose payload is non-numeric", async () => {
+    // 正しいフォーマット・正しい署名でも payload が数値でない場合は期限検証で弾く。
+    // signSession は任意の文字列を署名できるので、非数値 payload を正しく署名して送る。
+    const tampered = await signSession("not-a-number", sessionSecret);
+    const res = await req("/api/links", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `session=${tampered}`,
+      },
+      body: JSON.stringify({ url: "https://example.com/non-numeric" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
   it("returns 401 when SESSION_SECRET is not configured", async () => {
     // SESSION_SECRET 未設定時は adminAuth が即座に 401 を返すべき（src/index.ts:121-124）
     const cookie = await signSession(String(Date.now()), sessionSecret);
