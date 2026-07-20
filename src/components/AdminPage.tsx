@@ -27,7 +27,10 @@ export function AdminPage() {
     let res: Response;
     try {
       res = await fetch("/api/links", {
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${import.meta.env.ADMIN_API_KEY}`,
+        },
       });
     } catch {
       // ネットワークエラーは初回のみ error 状態へ。既存 list がある場合は保持。
@@ -71,7 +74,11 @@ export function AdminPage() {
       try {
         res = await fetch("/api/links", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${import.meta.env.ADMIN_API_KEY}`,
+          },
           body: JSON.stringify(input),
         });
       } catch {
@@ -110,6 +117,7 @@ export function AdminPage() {
       try {
         res = await fetch(`/api/links/${encodeURIComponent(slug)}`, {
           method: "DELETE",
+          headers: { Authorization: `Bearer ${import.meta.env.ADMIN_API_KEY}` },
         });
       } catch {
         return { ok: false, message: "通信エラーが発生しました。" };

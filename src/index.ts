@@ -1,6 +1,7 @@
 import type { Fetcher } from "@cloudflare/workers-types";
 import { zValidator } from "@hono/zod-validator";
 import { desc, eq, sql } from "drizzle-orm";
+import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import * as z from "zod";
 import { createDb } from "./db";
@@ -50,7 +51,25 @@ const validateCreateLink = zValidator("json", createLinkSchema, (result, c) => {
   }
 });
 
-const app = new Hono<{ Bindings: { DB: D1Database; ASSETS: Fetcher } }>();
+const app = new Hono<{ Bindings: { DB: D1Database; ASSETS: Fetcher; ADMIN_API_KEY: string } }>();
+
+type AppEnv = { Bindings: { DB: D1Database; ASSETS: Fetcher; ADMIN_API_KEY: string } };
+
+/**
+ * 管理 API 用 Bearer token 認証 middleware。
+ * Authorization: Bearer <ADMIN_API_KEY> を検証する。失敗時は 401。
+ */
+const adminAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const header = c.req.header("Authorization");
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+  if (!c.env.ADMIN_API_KEY) {
+    console.warn("ADMIN_API_KEY is not configured");
+  }
+  if (!token || token !== c.env.ADMIN_API_KEY) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  await next();
+};
 
 /**
  * 静的アセットフォールバック。
@@ -86,7 +105,7 @@ app.use("*", async (c, next) => {
  * - slug 省略時: base62 ランダム 7 文字を生成し、衝突時は再生成（最大 5 回）。
  * - slug 指定時: 既存衝突は 409。
  */
-app.post("/api/links", validateCreateLink, async (c) => {
+app.post("/api/links", adminAuth, validateCreateLink, async (c) => {
   const { url, slug: requested } = c.req.valid("json");
   const db = createDb(c.env.DB);
 
@@ -131,7 +150,7 @@ app.post("/api/links", validateCreateLink, async (c) => {
  * 全リンク一覧（作成日時降順）。created_at は text 列だが ISO8601 文字列で
 //  格納されているため辞書順 = 時系列順になり、desc で降順になる。
  */
-app.get("/api/links", async (c) => {
+app.get("/api/links", adminAuth, async (c) => {
   const db = createDb(c.env.DB);
   const rows = await db
     .select({
@@ -150,7 +169,7 @@ app.get("/api/links", async (c) => {
 /**
  * リンク削除。存在しなければ 404、あれば削除して 204。
  */
-app.delete("/api/links/:slug", async (c) => {
+app.delete("/api/links/:slug", adminAuth, async (c) => {
   const slug = c.req.param("slug");
   const db = createDb(c.env.DB);
 

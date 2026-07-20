@@ -3,16 +3,31 @@ import { describe, expect, it } from "vitest";
 import app from "../src/index";
 
 const origin = "http://localhost:8787";
+const adminApiKey = "dev-secret-key-change-in-production";
+
+function authHeaders() {
+  return { Authorization: `Bearer ${adminApiKey}` };
+}
 
 function req(path: string, init?: RequestInit) {
   return app.request(`${origin}${path}`, init, env);
 }
 
 describe("POST /api/links", () => {
-  it("creates a link with 201 and returns slug + shortUrl", async () => {
+  it("rejects unauthenticated requests with 401", async () => {
     const res = await req("/api/links", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: "https://example.com/page" }),
+    });
+
+    expect(res.status).toBe(401);
+  });
+
+  it("creates a link with 201 and returns slug + shortUrl when authenticated", async () => {
+    const res = await req("/api/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ url: "https://example.com/page" }),
     });
 
@@ -25,7 +40,7 @@ describe("POST /api/links", () => {
   it("generates a 7-character base62 slug when omitted", async () => {
     const res = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ url: "https://example.com/foo" }),
     });
 
@@ -38,7 +53,7 @@ describe("POST /api/links", () => {
   it("rejects an invalid URL with 400", async () => {
     const res = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ url: "not-a-url" }),
     });
 
@@ -48,7 +63,7 @@ describe("POST /api/links", () => {
   it("rejects non-http(s) URL with 400", async () => {
     const res = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ url: "ftp://example.com/file" }),
     });
 
@@ -60,14 +75,14 @@ describe("POST /api/links", () => {
 
     const first = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ url: "https://example.com/1", slug }),
     });
     expect(first.status).toBe(201);
 
     const second = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ url: "https://example.com/2", slug }),
     });
     expect(second.status).toBe(409);
@@ -77,7 +92,7 @@ describe("POST /api/links", () => {
     for (const slug of ["api/foo", "admin/bar"]) {
       const res = await req("/api/links", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ url: "https://example.com/reserved", slug }),
       });
       expect(res.status).toBe(400);
@@ -92,7 +107,7 @@ describe("GET /:slug redirect", () => {
 
     const create = await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ url, slug }),
     });
     expect(create.status).toBe(201);
@@ -101,7 +116,7 @@ describe("GET /:slug redirect", () => {
     expect(redirect.status).toBe(302);
     expect(redirect.headers.get("Location")).toBe(url);
 
-    const list = await req("/api/links");
+    const list = await req("/api/links", { headers: authHeaders() });
     const rows = await list.json<Array<{ slug: string; clicks: number }>>();
     const row = rows.find((r) => r.slug === slug);
     expect(row?.clicks).toBe(1);
@@ -114,22 +129,27 @@ describe("GET /:slug redirect", () => {
 });
 
 describe("GET /api/links list", () => {
-  it("returns links sorted by created_at descending", async () => {
+  it("rejects unauthenticated requests with 401", async () => {
+    const res = await req("/api/links");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns links sorted by created_at descending when authenticated", async () => {
     const slugA = "list-a";
     const slugB = "list-b";
 
     await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ url: "https://example.com/a", slug: slugA }),
     });
     await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ url: "https://example.com/b", slug: slugB }),
     });
 
-    const res = await req("/api/links");
+    const res = await req("/api/links", { headers: authHeaders() });
     const rows = await res.json<Array<{ slug: string }>>();
     const slugs = rows.map((r) => r.slug);
     const idxA = slugs.indexOf(slugA);
@@ -141,16 +161,21 @@ describe("GET /api/links list", () => {
 });
 
 describe("DELETE /api/links/:slug", () => {
-  it("deletes an existing link and returns 204", async () => {
+  it("rejects unauthenticated requests with 401", async () => {
+    const res = await req("/api/links/no-such-slug", { method: "DELETE" });
+    expect(res.status).toBe(401);
+  });
+
+  it("deletes an existing link and returns 204 when authenticated", async () => {
     const slug = "delete-test";
 
     await req("/api/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ url: "https://example.com/delete", slug }),
     });
 
-    const del = await req(`/api/links/${slug}`, { method: "DELETE" });
+    const del = await req(`/api/links/${slug}`, { method: "DELETE", headers: authHeaders() });
     expect(del.status).toBe(204);
 
     const redirect = await req(`/${slug}`);
@@ -158,7 +183,7 @@ describe("DELETE /api/links/:slug", () => {
   });
 
   it("returns 404 when deleting an unregistered slug", async () => {
-    const res = await req("/api/links/no-such-slug", { method: "DELETE" });
+    const res = await req("/api/links/no-such-slug", { method: "DELETE", headers: authHeaders() });
     expect(res.status).toBe(404);
   });
 });
