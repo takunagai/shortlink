@@ -1,16 +1,23 @@
 ---
-// 管理画面（別タスクで実装予定）。
-// バックエンド API は /api/links で提供済み。このページはプレースホルダ。
+// 管理画面 /admin。Astro ページがレイアウトとグローバル CSS を担い、
+// React 19 island（AdminPage, client:load）が状態と API 呼び出しを統括する。
+import "@/styles/global.css";
+import { AdminPage } from "@/components/AdminPage";
+
+// フォームに表示する origin。リクエストのホストを使う（ローカル/本番で切り替わる）。
+const origin = Astro.url.origin;
 ---
+
 <!doctype html>
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>shortlink admin</title>
+    <title>リンク管理 ─ shortlink</title>
   </head>
-  <body>
-    <h1>shortlink admin</h1>
-    <p>管理画面は別タスクで実装されます。API は <code>/api/links</code> を使用してください。</p>
+  <body class="min-h-screen">
+    <main class="mx-auto max-w-5xl px-4 py-8 md:px-6">
+      <AdminPage origin={origin} client:load />
+    </main>
   </body>
 </html>

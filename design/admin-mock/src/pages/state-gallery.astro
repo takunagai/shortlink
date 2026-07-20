@@ -1,0 +1,200 @@
+---
+import "@/styles/global.css";
+import PageHeader from "@/components/PageHeader.astro";
+
+// 状態バリエーション集 ─ ローディング / 空 / エラー / 作成成功 / 削除確認ダイアログ。
+// 実装担当が各状態のビジュアルを確認するためのカタログ。
+const origin = "https://slk.example.app";
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>状態カタログ ─ shortlink 管理画面カンプ</title>
+  </head>
+  <body class="min-h-screen">
+    <main class="mx-auto max-w-5xl px-4 py-8 md:px-6">
+      <PageHeader
+        title="状態カタログ"
+        subtitle="各状態（loading / empty / error / success / confirm）のビジュアル定義。実装は docs/admin-design.md の状態遷移に従う。"
+      />
+
+      <div class="mt-8 space-y-12">
+        {/* ========== 1. loading ========== */}
+        <section>
+          <h2 class="text-section font-bold text-ink">1. 一覧: loading（初回）</h2>
+          <p class="mt-1 text-meta text-muted">
+            スケルトン行 ×3。空っぽにせず、テーブル枠を保ったままフェード。
+          </p>
+          <div class="mt-4 overflow-hidden rounded-card border border-border bg-surface shadow-card">
+            <div class="hidden md:block">
+              <table class="w-full border-collapse">
+                <thead>
+                  <tr class="border-b border-border bg-canvas text-left">
+                    <th class="px-6 py-3 text-meta font-bold text-muted">slug</th>
+                    <th class="px-6 py-3 text-meta font-bold text-muted">元 URL</th>
+                    <th class="px-6 py-3 text-meta font-bold text-muted text-right">クリック</th>
+                    <th class="px-6 py-3 text-meta font-bold text-muted">作成日時</th>
+                    <th class="px-6 py-3"><span class="sr-only">操作</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[0, 1, 2].map(() => (
+                    <tr class="border-b border-border last:border-b-0">
+                      <td class="px-6 py-3"><div class="h-4 w-24 animate-pulse rounded bg-canvas"></div></td>
+                      <td class="px-6 py-3"><div class="h-4 w-72 animate-pulse rounded bg-canvas"></div></td>
+                      <td class="px-6 py-3"><div class="ml-auto h-4 w-10 animate-pulse rounded bg-canvas"></div></td>
+                      <td class="px-6 py-3"><div class="h-4 w-32 animate-pulse rounded bg-canvas"></div></td>
+                      <td class="px-6 py-3"><div class="ml-auto h-7 w-14 animate-pulse rounded bg-canvas"></div></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        {/* ========== 2. empty ========== */}
+        <section>
+          <h2 class="text-section font-bold text-ink">2. 一覧: empty</h2>
+          <p class="mt-1 text-meta text-muted">カード中央にメッセージ。フォームへ誘導。</p>
+          <div class="mt-4 overflow-hidden rounded-card border border-border bg-surface shadow-card">
+            <div class="border-b border-border px-6 py-4">
+              <h3 class="text-section font-bold text-ink">リンク一覧</h3>
+            </div>
+            <div class="px-6 py-16 text-center">
+              <p class="text-body text-ink">まだリンクがありません。</p>
+              <p class="mt-2 text-meta text-muted">上のフォームから作成してください。</p>
+            </div>
+          </div>
+        </section>
+
+        {/* ========== 3. error ========== */}
+        <section>
+          <h2 class="text-section font-bold text-ink">3. 一覧: error</h2>
+          <p class="mt-1 text-meta text-muted">
+            danger 系メッセージ + 再取得（ghost）ボタン。
+          </p>
+          <div class="mt-4 overflow-hidden rounded-card border border-border bg-surface shadow-card">
+            <div class="border-b border-border px-6 py-4">
+              <h3 class="text-section font-bold text-ink">リンク一覧</h3>
+            </div>
+            <div class="space-y-3 px-6 py-10 text-center">
+              <p class="text-body font-bold text-danger">一覧の取得に失敗しました。</p>
+              <p class="text-meta text-muted">
+                【コピー待ち: エラー詳細 ─ 後述の実エラーメッセージ、または省略】
+              </p>
+              <button
+                type="button"
+                class="mt-2 rounded-control px-4 py-2 text-body text-accent hover:bg-accent-subtle"
+              >
+                再取得
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ========== 4. 作成: success / error メッセージ ========== */}
+        <section>
+          <h2 class="text-section font-bold text-ink">4. フォーム: 成功 / エラーメッセージ</h2>
+          <p class="mt-1 text-meta text-muted">フォーム直下にインライン表示。1.5 秒後に自動消去（success）。</p>
+
+          <div class="mt-4 grid gap-4 md:grid-cols-2">
+            {/* success */}
+            <div class="rounded-card border border-border bg-surface p-6 shadow-card">
+              <div class="flex items-start gap-3 rounded-control bg-success-subtle p-3">
+                <span aria-hidden="true" class="mt-0.5 text-success">✓</span>
+                <p class="text-meta text-ink">
+                  <span class="font-bold text-success">作成しました。</span>
+                  <a href={`${origin}/launch`} class="ml-1 break-all font-mono text-accent underline-offset-2 hover:underline">{origin}/launch</a>
+                </p>
+              </div>
+              <p class="mt-3 text-meta text-muted">※ 実装: success 状態。作成後に自動消去（1.5s）→ idle へ。</p>
+            </div>
+
+            {/* error: slug 重複 */}
+            <div class="rounded-card border border-border bg-surface p-6 shadow-card">
+              <div class="flex items-start gap-3 rounded-control bg-danger-subtle p-3" role="alert">
+                <span aria-hidden="true" class="mt-0.5 text-danger">!</span>
+                <p class="text-meta text-ink">
+                  <span class="font-bold text-danger">この slug は既に使われています。</span>
+                  別の slug を入力するか、空欄にして自動生成してください。
+                </p>
+              </div>
+              <p class="mt-3 text-meta text-muted">※ 実装: error 状態。入力は保持したまま（修正して再送可能）。</p>
+            </div>
+          </div>
+        </section>
+
+        {/* ========== 5. 削除: 確認ダイアログ ========== */}
+        <section>
+          <h2 class="text-section font-bold text-ink">5. 削除: 確認ダイアログ</h2>
+          <p class="mt-1 text-meta text-muted">
+            shadcn Dialog。背景オーバーレイ付き。キャンセルに初期フォーカス（誤削除防止）。
+          </p>
+
+          <div class="mt-4 rounded-card border border-border bg-canvas p-8 shadow-card">
+            <div class="mx-auto max-w-md rounded-card border border-border bg-surface shadow-dialog">
+              <div class="p-6">
+                <h3 class="text-section font-bold text-ink">リンクを削除</h3>
+                <p class="mt-2 text-meta text-muted">
+                  <span class="font-mono text-ink">/launch</span> を削除しますか？
+                  <br />この操作は取り消せません。
+                </p>
+              </div>
+              <div class="flex justify-end gap-3 border-t border-border px-6 py-4">
+                <button
+                  type="button"
+                  class="rounded-control border border-border px-4 py-2 text-body text-ink hover:bg-canvas"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  class="rounded-control bg-danger px-4 py-2 text-body font-bold text-white transition-colors hover:bg-danger-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                >
+                  削除
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ========== 6. トークン早見 ========== */}
+        <section>
+          <h2 class="text-section font-bold text-ink">6. トークン早見表</h2>
+          <p class="mt-1 text-meta text-muted">
+            docs/design-tokens.md の @theme から自動生成されたユーティリティの使用例。
+          </p>
+          <div class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div class="rounded-card border border-border bg-surface p-4 shadow-card">
+              <p class="text-meta text-muted">bg-canvas / bg-surface</p>
+              <div class="mt-2 flex gap-2">
+                <span class="h-10 flex-1 rounded-control border border-border bg-canvas"></span>
+                <span class="h-10 flex-1 rounded-control border border-border bg-surface"></span>
+              </div>
+            </div>
+            <div class="rounded-card border border-border bg-surface p-4 shadow-card">
+              <p class="text-meta text-muted">accent / danger / success</p>
+              <div class="mt-2 flex gap-2">
+                <span class="h-10 flex-1 rounded-control bg-accent"></span>
+                <span class="h-10 flex-1 rounded-control bg-danger"></span>
+                <span class="h-10 flex-1 rounded-control bg-success"></span>
+              </div>
+            </div>
+            <div class="rounded-card border border-border bg-surface p-4 shadow-card">
+              <p class="text-meta text-muted">ink / muted / subtle</p>
+              <div class="mt-2 space-y-1">
+                <p class="text-body text-ink">本文 (text-ink)</p>
+                <p class="text-meta text-muted">メタ (text-muted)</p>
+                <p class="text-meta text-subtle">装飾 (text-subtle)</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

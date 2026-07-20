@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* 色 ─ 意味で命名 */
+  --color-canvas: oklch(0.97 0.004 250);
+  --color-surface: oklch(1 0 0);
+  --color-ink: oklch(0.27 0.015 260);
+  --color-muted: oklch(0.51 0.014 260);
+  --color-subtle: oklch(0.68 0.012 260);
+  --color-border: oklch(0.90 0.006 260);
+  --color-border-strong: oklch(0.82 0.010 260);
+  --color-accent: oklch(0.55 0.18 255);
+  --color-accent-hover: oklch(0.48 0.19 255);
+  --color-accent-subtle: oklch(0.95 0.03 255);
+  --color-danger: oklch(0.56 0.20 27);
+  --color-danger-hover: oklch(0.49 0.21 27);
+  --color-danger-subtle: oklch(0.96 0.03 27);
+  --color-success: oklch(0.52 0.15 150);
+  --color-success-subtle: oklch(0.95 0.03 150);
+
+  /* フォント ─ OS 標準スタック。日本語 Web フォント・游ゴシック・system-ui を使わない */
+  --font-body: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN",
+               "Hiragino Sans", "Noto Sans JP", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Consolas",
+               "Liberation Mono", monospace;
+  --font-display: var(--font-body);
+
+  /* タイポスケール ─ ジャンプ率は控えめ（作業画面） */
+  --text-page-title: 1.75rem;
+  --text-section: 1.25rem;
+  --text-body: 1rem;
+  --text-meta: 0.875rem;
+  --text-mono: 0.875rem;
+
+  --leading-tight: 1.25;
+  --leading-body: 1.6;
+
+  /* スペーシング ─ 8px グリッド */
+  --spacing: 0.25rem;
+
+  /* 角丸・影 */
+  --radius-card: 0.75rem;
+  --radius-control: 0.5rem;
+  --radius-pill: 9999px;
+
+  --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.08),
+                 0 1px 2px -1px rgb(15 23 42 / 0.06);
+  --shadow-dialog: 0 10px 38px -10px rgb(15 23 42 / 0.25),
+                   0 10px 20px -15px rgb(15 23 42 / 0.15);
+
+  --border-width: 1px;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}

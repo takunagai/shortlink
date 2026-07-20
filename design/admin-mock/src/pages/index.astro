@@ -1,0 +1,66 @@
+---
+import "@/styles/global.css";
+import LinkCreateForm from "@/components/LinkCreateForm.astro";
+import LinkList from "@/components/LinkList.astro";
+import PageHeader from "@/components/PageHeader.astro";
+
+// デザインカンプ: 管理画面のデフォルト状態（データあり・フォーム idle）。
+// 実コピー未着の箇所は【コピー待ち: ...】で明示。
+const sampleLinks = [
+  {
+    id: 4,
+    slug: "launch",
+    url: "https://example.com/products/new-launch-announcement",
+    clicks: 128,
+    created_at: "2026-07-20 17:42",
+  },
+  {
+    id: 3,
+    slug: "ab9x2Qk",
+    url: "https://docs.example.com/guides/getting-started",
+    clicks: 42,
+    created_at: "2026-07-20 12:03",
+  },
+  {
+    id: 2,
+    slug: "webinar",
+    url: "https://example.com/events/2026-summer-webinar",
+    clicks: 7,
+    created_at: "2026-07-19 22:10",
+  },
+  {
+    id: 1,
+    slug: "k7Mp2La",
+    url: "https://github.com/example/repo",
+    clicks: 0,
+    created_at: "2026-07-18 09:15",
+  },
+];
+const origin = "https://slk.example.app";
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>リンク管理 ─ shortlink 管理画面（デザインカンプ）</title>
+  </head>
+  <body class="min-h-screen">
+    <main class="mx-auto max-w-5xl px-4 py-8 md:px-6">
+      <PageHeader
+        title="リンク管理"
+        subtitle="【コピー待ち: ページヘッダ補足 ─ 短縮 URL の作成・一覧・削除、15字程度】"
+      />
+
+      <div class="mt-8 space-y-8">
+        <LinkCreateForm origin={origin} />
+        <LinkList links={sampleLinks} origin={origin} />
+      </div>
+
+      <footer class="mt-12 text-meta text-subtle">
+        【コピー待ち: フッタ ─ サービス名・連絡先等、不要なら省略可】
+      </footer>
+    </main>
+  </body>
+</html>

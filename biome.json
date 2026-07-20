@@ -43,6 +43,10 @@
         "rules": {
           "style": {
             "useImportType": "off"
+          },
+          "correctness": {
+            "noUnusedImports": "off",
+            "noUnusedVariables": "off"
           }
         }
       }
