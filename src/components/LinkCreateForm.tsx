@@ -96,7 +96,7 @@ export function LinkCreateForm({ origin, onCreate }: LinkCreateFormProps) {
         <h2 id="create-heading" className="text-section leading-tight font-bold text-ink">
           新しいリンク
         </h2>
-        <p className="mt-1 text-meta text-muted">短縮 URL を作成します</p>
+        <p className="mt-2 text-meta text-muted">短縮 URL を作成します</p>
       </div>
 
       <form className="space-y-4 p-6" onSubmit={handleSubmit} noValidate>
@@ -142,7 +142,7 @@ export function LinkCreateForm({ origin, onCreate }: LinkCreateFormProps) {
                 placeholder="my-link"
                 autoComplete="off"
                 spellCheck="false"
-                className="w-full bg-transparent px-3 py-2 text-body text-ink placeholder:text-subtle focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full bg-transparent px-3 py-2 text-body text-ink placeholder:text-subtle disabled:cursor-not-allowed disabled:opacity-60"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
                 disabled={disabled}

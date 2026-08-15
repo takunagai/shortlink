@@ -41,7 +41,9 @@ export function LinkList({
         <h2 id="list-heading" className="text-section leading-tight font-bold text-ink">
           リンク一覧
         </h2>
-        <span className="text-meta text-muted">{status === "list" ? `${count} 件` : ""}</span>
+        <span className="text-meta tabular-nums text-muted">
+          {status === "list" ? `${count} 件` : ""}
+        </span>
       </div>
 
       {status === "loading" && <LoadingBody />}
@@ -67,9 +69,9 @@ export function LinkList({
                 {links.map((l) => (
                   <tr
                     key={l.id}
-                    className="border-b border-border last:border-b-0 hover:bg-canvas/60"
+                    className="border-b border-border last:border-b-0 transition-colors hover:bg-canvas/60"
                   >
-                    <td className="px-6 py-3 align-middle">
+                    <td className="px-6 py-3 align-middle whitespace-nowrap">
                       <a
                         href={`${origin}/${l.slug}`}
                         target="_blank"
@@ -90,10 +92,10 @@ export function LinkList({
                         {l.url}
                       </a>
                     </td>
-                    <td className="px-6 py-3 text-right align-middle tabular-nums text-ink">
+                    <td className="px-6 py-3 text-right align-middle tabular-nums text-ink whitespace-nowrap">
                       {l.clicks.toLocaleString("ja-JP")}
                     </td>
-                    <td className="px-6 py-3 align-middle text-meta tabular-nums text-muted">
+                    <td className="px-6 py-3 align-middle text-meta tabular-nums text-muted whitespace-nowrap">
                       <time dateTime={l.created_at}>{formatDate(l.created_at)}</time>
                     </td>
                     <td className="px-6 py-3 text-right align-middle">
@@ -108,7 +110,7 @@ export function LinkList({
           {/* モバイル: カードリスト（横スクロールさせない） */}
           <ul className="divide-y divide-border md:hidden">
             {links.map((l) => (
-              <li key={l.id} className="space-y-3 p-4">
+              <li key={l.id} className="space-y-3 px-6 py-4">
                 <div className="flex items-start justify-between gap-3">
                   <a
                     href={`${origin}/${l.slug}`}
@@ -118,7 +120,9 @@ export function LinkList({
                   >
                     /{l.slug}
                   </a>
-                  <DeleteButton slug={l.slug} onDelete={onDelete} />
+                  <div className="flex shrink-0 items-start">
+                    <DeleteButton slug={l.slug} onDelete={onDelete} />
+                  </div>
                 </div>
                 <a
                   href={l.url}
@@ -201,9 +205,23 @@ function LoadingBody() {
 }
 
 function EmptyBody() {
+  // 空状態。インライン SVG アイコン（依存追加なし）+ 中心揃えで「まだ空である」旨を提示。
   return (
     <div className="px-6 py-16 text-center">
-      <p className="text-body text-ink">まだリンクがありません。</p>
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="mx-auto h-10 w-10 text-subtle"
+      >
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </svg>
+      <p className="mt-4 text-body font-bold text-ink">まだリンクがありません。</p>
       <p className="mt-2 text-meta text-muted">上のフォームから作成してください。</p>
     </div>
   );
