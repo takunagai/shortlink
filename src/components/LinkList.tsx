@@ -41,7 +41,9 @@ export function LinkList({
         <h2 id="list-heading" className="text-section leading-tight font-bold text-ink">
           リンク一覧
         </h2>
-        <span className="text-meta text-muted">{status === "list" ? `${count} 件` : ""}</span>
+        <span className="text-meta tabular-nums text-muted">
+          {status === "list" ? `${count} 件` : ""}
+        </span>
       </div>
 
       {status === "loading" && <LoadingBody />}
@@ -49,9 +51,22 @@ export function LinkList({
       {status === "error" && <ErrorBody message={errorMessage} onRetry={onRetry} />}
       {status === "list" && (
         <>
-          {/* デスクトップ: テーブル */}
+          {/* デスクトップ: テーブル。
+              幅の入り得る列（slug=最大64字・日時）を nowrap にすると md（768px）幅で
+              テーブルの min-content が親の幅を超え、overflow-hidden が操作列をクリップする
+              （review B-001）。table-fixed + rem 固定列で折返し前提に切り替える:
+              slug/元URL は truncate + title、作成日時は nowrap を外して列内で折返す。 */}
           <div className="hidden md:block">
-            <table className="w-full border-collapse text-body">
+            <table className="w-full table-fixed border-collapse text-body">
+              <colgroup>
+                {/* 列幅は table-fixed の rem 固定。md=768px で section 幅 718px に対し
+                    固定列合計 580px + URL 列が余りを消化する（138px 以上は常に確保）。 */}
+                <col className="w-56" />
+                <col />
+                <col className="w-28" />
+                <col className="w-[10.5rem]" />
+                <col className="w-[4.75rem]" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-border bg-canvas text-left">
                   <Th>slug</Th>
@@ -67,19 +82,20 @@ export function LinkList({
                 {links.map((l) => (
                   <tr
                     key={l.id}
-                    className="border-b border-border last:border-b-0 hover:bg-canvas/60"
+                    className="border-b border-border last:border-b-0 transition-colors hover:bg-canvas/60"
                   >
-                    <td className="px-6 py-3 align-middle">
+                    <td className="px-4 py-3 align-middle">
                       <a
                         href={`${origin}/${l.slug}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-mono text-mono text-accent underline-offset-2 hover:underline"
+                        title={`/${l.slug}`}
+                        className="block truncate font-mono text-mono text-accent underline-offset-2 hover:underline"
                       >
                         /{l.slug}
                       </a>
                     </td>
-                    <td className="max-w-[28rem] px-6 py-3 align-middle">
+                    <td className="px-4 py-3 align-middle">
                       <a
                         href={l.url}
                         target="_blank"
@@ -90,13 +106,13 @@ export function LinkList({
                         {l.url}
                       </a>
                     </td>
-                    <td className="px-6 py-3 text-right align-middle tabular-nums text-ink">
+                    <td className="px-4 py-3 text-right align-middle tabular-nums text-ink">
                       {l.clicks.toLocaleString("ja-JP")}
                     </td>
-                    <td className="px-6 py-3 align-middle text-meta tabular-nums text-muted">
+                    <td className="px-4 py-3 align-middle text-meta tabular-nums text-muted">
                       <time dateTime={l.created_at}>{formatDate(l.created_at)}</time>
                     </td>
-                    <td className="px-6 py-3 text-right align-middle">
+                    <td className="px-4 py-3 text-right align-middle">
                       <DeleteButton slug={l.slug} onDelete={onDelete} />
                     </td>
                   </tr>
@@ -108,7 +124,7 @@ export function LinkList({
           {/* モバイル: カードリスト（横スクロールさせない） */}
           <ul className="divide-y divide-border md:hidden">
             {links.map((l) => (
-              <li key={l.id} className="space-y-3 p-4">
+              <li key={l.id} className="space-y-3 px-6 py-4">
                 <div className="flex items-start justify-between gap-3">
                   <a
                     href={`${origin}/${l.slug}`}
@@ -118,7 +134,9 @@ export function LinkList({
                   >
                     /{l.slug}
                   </a>
-                  <DeleteButton slug={l.slug} onDelete={onDelete} />
+                  <div className="flex shrink-0 items-start">
+                    <DeleteButton slug={l.slug} onDelete={onDelete} />
+                  </div>
                 </div>
                 <a
                   href={l.url}
@@ -158,7 +176,7 @@ function Th({ children, align = "left" }: { children: React.ReactNode; align?: "
     <th
       scope="col"
       className={cn(
-        "px-6 py-3 text-meta font-bold text-muted",
+        "px-4 py-3 text-meta font-bold text-muted",
         align === "right" ? "text-right" : "text-left",
       )}
     >
@@ -169,13 +187,15 @@ function Th({ children, align = "left" }: { children: React.ReactNode; align?: "
 
 function LoadingBody() {
   // 初回取得時のスケルトン。3行のプレースホルダ。スピナーは使わない。
+  // 行 padding を読み込み完了後の行（mobile li px-6 py-4 / desktop td px-4 py-3）に
+  // 合わせ、完了時の横ずれを防ぐ（review N-001）。外側の px-6 二重掛けはしない。
   return (
-    <div className="px-6 py-4">
+    <div>
       <div className="hidden md:block">
         {[0, 1, 2].map((i) => (
           <div
             key={i}
-            className="flex items-center gap-4 border-b border-border py-3 last:border-b-0"
+            className="flex items-center gap-4 border-b border-border px-4 py-3 last:border-b-0"
           >
             <div className="h-4 w-20 animate-pulse rounded-control bg-canvas" />
             <div className="h-4 flex-1 animate-pulse rounded-control bg-canvas" />
@@ -187,7 +207,7 @@ function LoadingBody() {
       </div>
       <ul className="divide-y divide-border md:hidden">
         {[0, 1, 2].map((i) => (
-          <li key={i} className="space-y-3 p-4">
+          <li key={i} className="space-y-3 px-6 py-4">
             <div className="h-4 w-32 animate-pulse rounded-control bg-canvas" />
             <div className="h-4 w-full animate-pulse rounded-control bg-canvas" />
           </li>
@@ -201,9 +221,23 @@ function LoadingBody() {
 }
 
 function EmptyBody() {
+  // 空状態。インライン SVG アイコン（依存追加なし）+ 中心揃えで「まだ空である」旨を提示。
   return (
     <div className="px-6 py-16 text-center">
-      <p className="text-body text-ink">まだリンクがありません。</p>
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="mx-auto h-10 w-10 text-subtle"
+      >
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </svg>
+      <p className="mt-4 text-body font-bold text-ink">まだリンクがありません。</p>
       <p className="mt-2 text-meta text-muted">上のフォームから作成してください。</p>
     </div>
   );

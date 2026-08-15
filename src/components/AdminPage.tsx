@@ -16,6 +16,8 @@ import { useCallback, useEffect, useState } from "react";
 import { type CreateResult, LinkCreateForm } from "@/components/LinkCreateForm";
 import { LinkList } from "@/components/LinkList";
 import { PageHeader } from "@/components/PageHeader";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import type { Link } from "@/types";
 
 type ListStatus = "loading" | "list" | "empty" | "error";
@@ -178,17 +180,18 @@ export function AdminPage() {
     [refreshLinks],
   );
 
+  // 空状態（未ログイン）でもページの骨格がわかるよう、未認証時は PageHeader の補足を空にせず一言添える
   if (!isAuthenticated) {
     return (
       <>
-        <PageHeader title="管理ログイン" subtitle="" />
-        <section className="mx-auto mt-8 max-w-md rounded-card border border-border bg-surface shadow-card">
+        <PageHeader title="管理ログイン" subtitle="管理キーでログインします" />
+        <section className="mx-auto mt-6 max-w-md rounded-card border border-border bg-surface shadow-card">
           <form className="space-y-4 p-6" onSubmit={handleLogin}>
             <div>
               <label htmlFor="password" className="block text-body font-bold text-ink">
                 パスワード
               </label>
-              <input
+              <Input
                 id="password"
                 name="password"
                 type="password"
@@ -196,7 +199,8 @@ export function AdminPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loginSubmitting}
-                className="mt-2 w-full rounded-control border border-border bg-surface px-3 py-2 text-body text-ink focus:border-border-strong focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-2"
+                autoComplete="current-password"
               />
             </div>
             {loginError && (
@@ -207,13 +211,15 @@ export function AdminPage() {
                 {loginError}
               </p>
             )}
-            <button
+            <Button
               type="submit"
+              intent="primary"
+              size="md"
+              className="w-full"
               disabled={loginSubmitting}
-              className="inline-flex h-10 w-full items-center justify-center rounded-control bg-brand px-4 text-body font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loginSubmitting ? "ログイン中…" : "ログイン"}
-            </button>
+            </Button>
           </form>
         </section>
       </>
@@ -224,7 +230,7 @@ export function AdminPage() {
     <>
       <PageHeader title="リンク管理" subtitle="短縮 URL の作成・一覧・削除" />
 
-      <div className="mt-8 space-y-8">
+      <div className="mt-6 space-y-6">
         <LinkCreateForm origin={origin} onCreate={createLink} />
         <LinkList
           links={links}
